@@ -3,16 +3,17 @@ import { useState } from "react";
 import "./index.css";
 
 const initialMedicines = [
-  { id: 1, name: "Paracetamol 500mg", category: "Pain Relief", stock: 120, price: 2.5, expiry: "2027-08-15" },
-  { id: 2, name: "Amoxicillin 500mg", category: "Antibiotic", stock: 45, price: 8, expiry: "2027-04-20" },
-  { id: 3, name: "Cetirizine 10mg", category: "Allergy", stock: 8, price: 3.5, expiry: "2027-02-10" },
-  { id: 4, name: "Vitamin C 500mg", category: "Vitamins", stock: 75, price: 5, expiry: "2027-11-30" },
-  { id: 5, name: "Ibuprofen 200mg", category: "Pain Relief", stock: 4, price: 4.5, expiry: "2026-12-15" },
+  { id: 1, name: "Paracetamol 500mg", category: "Pain Relief", barcode: "4800000000011", stock: 120, price: 2.5, expiry: "2027-08-15" },
+  { id: 2, name: "Amoxicillin 500mg", category: "Antibiotic", barcode: "4800000000028", stock: 45, price: 8, expiry: "2027-04-20" },
+  { id: 3, name: "Cetirizine 10mg", category: "Allergy", barcode: "4800000000035", stock: 8, price: 3.5, expiry: "2027-02-10" },
+  { id: 4, name: "Vitamin C 500mg", category: "Vitamins", barcode: "4800000000042", stock: 75, price: 5, expiry: "2027-11-30" },
+  { id: 5, name: "Ibuprofen 200mg", category: "Pain Relief", barcode: "4800000000059", stock: 4, price: 4.5, expiry: "2026-12-15" },
 ];
 
 const emptyMedicine = {
   name: "",
   category: "",
+  barcode: "",
   stock: "1",
   price: "",
   expiry: "",
@@ -34,7 +35,6 @@ function App() {
   const [medicines, setMedicines] = useState(initialMedicines);
   const [search, setSearch] = useState("");
 
-  // Add New Medicine states
   const [showAddMedicine, setShowAddMedicine] = useState(false);
   const [newMedicine, setNewMedicine] = useState(emptyMedicine);
   const [addMedicineError, setAddMedicineError] = useState("");
@@ -95,9 +95,9 @@ function App() {
   );
 
   const filteredMedicines = medicines.filter((medicine) =>
-    `${medicine.name} ${medicine.category}`
+    `${medicine.name} ${medicine.category} ${medicine.barcode || ""}`
       .toLowerCase()
-      .includes(search.toLowerCase())
+      .includes(search.toLowerCase().trim())
   );
 
   const totalUnits = medicines.reduce(
@@ -129,7 +129,7 @@ function App() {
       maximumFractionDigits: 2,
     })}`;
 
-  // ADD NEW MEDICINE
+  // ADD NEW MEDICINE WITH BARCODE
   function handleAddMedicine(e) {
     e.preventDefault();
 
@@ -138,17 +138,26 @@ function App() {
 
     const name = newMedicine.name.trim();
     const category = newMedicine.category.trim();
+    const barcode = newMedicine.barcode.trim();
     const stock = Number(newMedicine.stock);
     const price = Number(newMedicine.price);
 
     if (
       !name ||
       !category ||
+      !barcode ||
       newMedicine.stock === "" ||
       newMedicine.price === "" ||
       !newMedicine.expiry
     ) {
       setAddMedicineError("Please complete all fields.");
+      return;
+    }
+
+    if (!/^[a-zA-Z0-9-]+$/.test(barcode)) {
+      setAddMedicineError(
+        "Barcode can contain letters, numbers, and hyphens only."
+      );
       return;
     }
 
@@ -171,14 +180,27 @@ function App() {
       return;
     }
 
-    const duplicate = medicines.some(
+    const duplicateName = medicines.some(
       (medicine) =>
         medicine.name.toLowerCase() === name.toLowerCase()
     );
 
-    if (duplicate) {
+    if (duplicateName) {
       setAddMedicineError(
         "This medicine already exists. Use Add Stock to update its quantity."
+      );
+      return;
+    }
+
+    const duplicateBarcode = medicines.some(
+      (medicine) =>
+        medicine.barcode &&
+        medicine.barcode.toLowerCase() === barcode.toLowerCase()
+    );
+
+    if (duplicateBarcode) {
+      setAddMedicineError(
+        "This barcode already exists. Please enter a unique barcode."
       );
       return;
     }
@@ -187,13 +209,13 @@ function App() {
       id: Date.now(),
       name,
       category,
+      barcode,
       stock,
       price,
       expiry: newMedicine.expiry,
     };
 
     setMedicines((current) => [...current, medicineToAdd]);
-
     setNewMedicine(emptyMedicine);
     setShowAddMedicine(false);
     setAddMedicineMessage(`${name} added successfully to inventory!`);
@@ -276,6 +298,7 @@ function App() {
       id: `TXN-${Date.now()}`,
       date: new Date().toLocaleString("en-PH"),
       medicine: product.name,
+      barcode: product.barcode || "",
       quantity: saleQuantity,
       price: product.price,
       total: product.price * saleQuantity,
@@ -293,6 +316,31 @@ function App() {
     setSaleMessage("Sale completed successfully!");
     setSelectedMedicine("");
     setQuantity("1");
+  }
+
+  // SCAN OR ENTER A BARCODE ON THE SALES PAGE
+  function handleSalesBarcode(e) {
+    const scannedBarcode = e.target.value.trim();
+
+    if (!scannedBarcode) return;
+
+    const product = medicines.find(
+      (medicine) => medicine.barcode === scannedBarcode
+    );
+
+    if (product) {
+      if (product.stock < 1) {
+        setSaleError(`${product.name} is out of stock.`);
+        setSaleMessage("");
+      } else {
+        setSelectedMedicine(String(product.id));
+        setSaleError("");
+        setSaleMessage(`${product.name} selected by barcode.`);
+      }
+    } else {
+      setSaleError("No medicine found with this barcode.");
+      setSaleMessage("");
+    }
   }
 
   if (page === "Login") {
@@ -595,7 +643,6 @@ function App() {
 
         {page === "Inventory" && (
           <>
-            {/* ADD NEW MEDICINE */}
             <section className="content-card">
               <div className="section-heading">
                 <div>
@@ -676,6 +723,26 @@ function App() {
                     </div>
 
                     <div className="form-group">
+                      <label htmlFor="newMedicineBarcode">Barcode Number</label>
+                      <input
+                        id="newMedicineBarcode"
+                        type="text"
+                        placeholder="Scan or enter barcode number"
+                        value={newMedicine.barcode}
+                        onChange={(e) =>
+                          setNewMedicine({
+                            ...newMedicine,
+                            barcode: e.target.value,
+                          })
+                        }
+                        required
+                      />
+                      <small className="muted">
+                        Use a USB barcode scanner or enter the number manually.
+                      </small>
+                    </div>
+
+                    <div className="form-group">
                       <label htmlFor="newMedicineStock">Initial Quantity</label>
                       <input
                         id="newMedicineStock"
@@ -744,7 +811,6 @@ function App() {
               )}
             </section>
 
-            {/* STOCK MANAGEMENT */}
             <section className="content-card">
               <div className="section-heading">
                 <div>
@@ -780,11 +846,7 @@ function App() {
                   <div className="stock-action-buttons">
                     <button
                       type="button"
-                      className={
-                        stockAction === "add"
-                          ? "primary-button"
-                          : "outline-button"
-                      }
+                      className={stockAction === "add" ? "primary-button" : "outline-button"}
                       onClick={() => {
                         setStockAction("add");
                         setStockMessage("");
@@ -796,11 +858,7 @@ function App() {
 
                     <button
                       type="button"
-                      className={
-                        stockAction === "remove"
-                          ? "primary-button"
-                          : "outline-button"
-                      }
+                      className={stockAction === "remove" ? "primary-button" : "outline-button"}
                       onClick={() => {
                         setStockAction("remove");
                         setStockMessage("");
@@ -829,27 +887,15 @@ function App() {
                   />
                 </div>
 
-                {stockError && (
-                  <p className="error-message" role="alert">
-                    {stockError}
-                  </p>
-                )}
-
-                {stockMessage && (
-                  <p className="success-message" role="status">
-                    {stockMessage}
-                  </p>
-                )}
+                {stockError && <p className="error-message" role="alert">{stockError}</p>}
+                {stockMessage && <p className="success-message" role="status">{stockMessage}</p>}
 
                 <button className="primary-button" type="submit">
-                  {stockAction === "add"
-                    ? "+ Confirm Add Stock"
-                    : "− Confirm Remove Stock"}
+                  {stockAction === "add" ? "+ Confirm Add Stock" : "− Confirm Remove Stock"}
                 </button>
               </form>
             </section>
 
-            {/* ALL MEDICINES TABLE */}
             <section className="content-card">
               <div className="section-heading">
                 <div>
@@ -862,7 +908,7 @@ function App() {
                 className="search-input"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search medicine or category..."
+                placeholder="Search medicine, category, or barcode..."
               />
 
               <div className="table-scroll">
@@ -871,6 +917,7 @@ function App() {
                     <tr>
                       <th>Medicine</th>
                       <th>Category</th>
+                      <th>Barcode</th>
                       <th>Stock</th>
                       <th>Unit Price</th>
                       <th>Expiry Date</th>
@@ -882,17 +929,14 @@ function App() {
                       <tr key={medicine.id}>
                         <td><strong>{medicine.name}</strong></td>
                         <td>{medicine.category}</td>
+                        <td>{medicine.barcode || "No barcode"}</td>
                         <td>{medicine.stock}</td>
                         <td>{peso(medicine.price)}</td>
                         <td>{medicine.expiry}</td>
                         <td>
                           <span
                             className={
-                              medicine.stock === 0
-                                ? "stock-badge"
-                                : medicine.stock <= 10
-                                ? "stock-badge"
-                                : "normal-badge"
+                              medicine.stock <= 10 ? "stock-badge" : "normal-badge"
                             }
                           >
                             {medicine.stock === 0
@@ -907,7 +951,7 @@ function App() {
 
                     {filteredMedicines.length === 0 && (
                       <tr>
-                        <td colSpan="6">No matching medicines found.</td>
+                        <td colSpan="7">No matching medicines found.</td>
                       </tr>
                     )}
                   </tbody>
@@ -921,10 +965,28 @@ function App() {
           <section className="content-card">
             <h2>New Sale</h2>
             <p className="muted">
-              Select a medicine and enter the quantity for this demo transaction.
+              Scan a medicine barcode or select a medicine manually.
             </p>
 
-            <form onSubmit={completeSale} className="sale-form">
+            <form className="sale-form" onSubmit={completeSale}>
+              <div className="form-group">
+                <label htmlFor="salesBarcode">Scan Barcode</label>
+                <input
+                  id="salesBarcode"
+                  type="text"
+                  placeholder="Scan or enter barcode, then press Enter"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleSalesBarcode(e);
+                    }
+                  }}
+                />
+                <small className="muted">
+                  USB scanner tip: aim the scanner at the barcode. Many scanners send Enter after scanning.
+                </small>
+              </div>
+
               <div className="form-group">
                 <label htmlFor="medicine">Select Medicine</label>
                 <select
@@ -944,8 +1006,7 @@ function App() {
                       value={medicine.id}
                       disabled={medicine.stock < 1}
                     >
-                      {medicine.name} · {medicine.stock} in stock ·{" "}
-                      {peso(medicine.price)}
+                      {medicine.name} · {medicine.stock} in stock · {peso(medicine.price)}
                     </option>
                   ))}
                 </select>
@@ -974,17 +1035,8 @@ function App() {
                 <strong>{peso(saleTotal)}</strong>
               </div>
 
-              {saleError && (
-                <p className="error-message" role="alert">
-                  {saleError}
-                </p>
-              )}
-
-              {saleMessage && (
-                <p className="success-message" role="status">
-                  {saleMessage}
-                </p>
-              )}
+              {saleError && <p className="error-message" role="alert">{saleError}</p>}
+              {saleMessage && <p className="success-message" role="status">{saleMessage}</p>}
 
               <button className="primary-button" type="submit">
                 Confirm Sale
@@ -1000,9 +1052,7 @@ function App() {
                 <h2>Sales History</h2>
                 <p>Completed transactions in this demo session.</p>
               </div>
-              <span className="normal-badge">
-                {sales.length} transaction(s)
-              </span>
+              <span className="normal-badge">{sales.length} transaction(s)</span>
             </div>
 
             <div className="table-scroll">
@@ -1028,12 +1078,9 @@ function App() {
                       <td><strong>{peso(sale.total)}</strong></td>
                     </tr>
                   ))}
-
                   {sales.length === 0 && (
                     <tr>
-                      <td colSpan="6">
-                        No sales yet. Go to New Sale to record a transaction.
-                      </td>
+                      <td colSpan="6">No sales yet. Go to New Sale to record a transaction.</td>
                     </tr>
                   )}
                 </tbody>
@@ -1042,9 +1089,7 @@ function App() {
 
             <div className="report-row">
               <span>Total sales value</span>
-              <strong>
-                {peso(sales.reduce((sum, sale) => sum + sale.total, 0))}
-              </strong>
+              <strong>{peso(sales.reduce((sum, sale) => sum + sale.total, 0))}</strong>
             </div>
           </section>
         )}
@@ -1073,11 +1118,8 @@ function App() {
                       <td>{medicine.stock}</td>
                     </tr>
                   ))}
-
                   {expiringMedicines.length === 0 && (
-                    <tr>
-                      <td colSpan="3">No matching records.</td>
-                    </tr>
+                    <tr><td colSpan="3">No matching records.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -1088,35 +1130,26 @@ function App() {
         {page === "Reports" && (
           <section className="content-card">
             <h2>Inventory &amp; Sales Reports</h2>
-            <p className="muted">
-              Current inventory and sales summary.
-            </p>
+            <p className="muted">Current inventory and sales summary.</p>
 
             <div className="report-row">
-              <span>Medicine types</span>
-              <strong>{medicines.length}</strong>
+              <span>Medicine types</span><strong>{medicines.length}</strong>
             </div>
             <div className="report-row">
-              <span>Total units in stock</span>
-              <strong>{totalUnits}</strong>
+              <span>Total units in stock</span><strong>{totalUnits}</strong>
             </div>
             <div className="report-row">
-              <span>Low-stock products</span>
-              <strong>{lowStock.length}</strong>
+              <span>Low-stock products</span><strong>{lowStock.length}</strong>
             </div>
             <div className="report-row">
-              <span>Estimated inventory value</span>
-              <strong>{peso(inventoryValue)}</strong>
+              <span>Estimated inventory value</span><strong>{peso(inventoryValue)}</strong>
             </div>
             <div className="report-row">
-              <span>Completed transactions</span>
-              <strong>{sales.length}</strong>
+              <span>Completed transactions</span><strong>{sales.length}</strong>
             </div>
             <div className="report-row">
               <span>Total sales value</span>
-              <strong>
-                {peso(sales.reduce((sum, sale) => sum + sale.total, 0))}
-              </strong>
+              <strong>{peso(sales.reduce((sum, sale) => sum + sale.total, 0))}</strong>
             </div>
           </section>
         )}
